@@ -1,3 +1,4 @@
+// TODO: update tui code to be more inline with template 
 use std::io::{self, stdout, Stdout};
 
 use ratatui::{
