@@ -14,7 +14,7 @@
     want to have some kind of profile/stats page for showing guage of tasks completed
     vs in progress.
 
-    when a user has tasks they should be presented as a list that the user can navigate 
+    when a user has tasks they should be presented as a list that the user can navigate
     through
 
     key-mappings:
@@ -54,13 +54,35 @@
     WARN: if stuck look at other todo apps built with ratatui/tui-realm (ratatui framework)
     https://github.com/newfla/todotui
 */
-use tui_todo::{app::TodoApp, tui};
 
 use std::io;
 
-fn main() -> io::Result<()> {
-    let mut terminal = tui::init()?;
-    let todo_result = TodoApp::default().run(&mut terminal);
-    tui::restore()?;
-    todo_result
+use ratatui::{backend::CrosstermBackend, Terminal};
+use tui_todo::{
+    app::{AppResult, TodoApp},
+    event::{Event, EventHandler},
+    handler::handle_key_events,
+    tui::Tui,
+};
+
+fn main() -> AppResult<()> {
+    let mut app = TodoApp::new();
+
+    let backend = CrosstermBackend::new(io::stderr());
+    let terminal = Terminal::new(backend)?;
+    let events = EventHandler::new();
+    let mut tui = Tui::new(terminal, events);
+    tui.init()?;
+
+    while app.running {
+        tui.draw(&mut app)?;
+        match tui.events.next()? {
+            Event::Key(key_event) => handle_key_events(key_event, &mut app)?,
+            Event::Resize(_, _) => {}
+            Event::Mouse(_) => {}
+        }
+    }
+
+    tui.exit()?;
+    Ok(())
 }

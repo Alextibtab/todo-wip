@@ -1,25 +1,61 @@
-// TODO: update tui code to be more inline with template 
-use std::io::{self, stdout, Stdout};
+// TODO: update tui code to be more inline with template
+
+use std::{io, panic};
 
 use ratatui::{
-   backend::CrosstermBackend,
-   crossterm::{
-      execute,
-      terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-   },
-   Terminal,
+    backend::Backend,
+    crossterm::{
+        event::{DisableMouseCapture, EnableMouseCapture},
+        terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
+    },
+    Terminal,
 };
 
-pub type Tui = Terminal<CrosstermBackend<Stdout>>;
+use crate::{
+    app::{AppResult, TodoApp},
+    event::EventHandler,
+    ui,
+};
 
-pub fn init() -> io::Result<Tui> {
-   execute!(stdout(), EnterAlternateScreen)?;
-   enable_raw_mode()?;
-   Terminal::new(CrosstermBackend::new(stdout()))
+pub struct Tui<B: Backend> {
+    terminal: Terminal<B>,
+    pub events: EventHandler,
 }
 
-pub fn restore() -> io::Result<()> {
-   execute!(stdout(), LeaveAlternateScreen)?;
-   disable_raw_mode()?;
-   Ok(())
+impl<B: Backend> Tui<B> {
+    pub fn new(terminal: Terminal<B>, events: EventHandler) -> Self {
+        Self { terminal, events }
+    }
+
+    pub fn init(&mut self) -> AppResult<()> {
+        terminal::enable_raw_mode()?;
+        ratatui::crossterm::execute!(io::stderr(), EnterAlternateScreen, EnableMouseCapture)?;
+
+        let panic_hook = panic::take_hook();
+        panic::set_hook(Box::new(move |panic| {
+            Self::reset().expect("failed to reset the terminal");
+            panic_hook(panic);
+        }));
+
+        self.terminal.hide_cursor()?;
+        self.terminal.clear()?;
+        Ok(())
+    }
+
+    pub fn draw(&mut self, app: &mut TodoApp) -> AppResult<()> {
+        self.terminal.draw(|frame| ui::render(app, frame))?;
+        Ok(())
+    }
+
+    fn reset() -> AppResult<()> {
+        terminal::disable_raw_mode()?;
+        ratatui::crossterm::execute!(io::stderr(), LeaveAlternateScreen, DisableMouseCapture)?;
+        Ok(())
+    }
+
+    pub fn exit(&mut self) -> AppResult<()> {
+        Self::reset()?;
+        self.terminal.show_cursor()?;
+        Ok(())
+    }
 }
